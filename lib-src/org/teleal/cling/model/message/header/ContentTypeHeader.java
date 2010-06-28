@@ -1,0 +1,51 @@
+/*
+ * Copyright (C) 2010 Teleal GmbH, Switzerland
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+package org.teleal.cling.model.message.header;
+
+import org.teleal.common.util.MimeType;
+
+public class ContentTypeHeader extends UpnpHeader<MimeType> {
+
+    public static final MimeType DEFAULT_CONTENT_TYPE = MimeType.valueOf("text/xml");
+    public static final MimeType DEFAULT_CONTENT_TYPE_UTF8 = MimeType.valueOf("text/xml;charset=\"utf-8\"");
+
+    public ContentTypeHeader() {
+        setValue(DEFAULT_CONTENT_TYPE);
+    }
+
+    public ContentTypeHeader(MimeType contentType) {
+        setValue(contentType);
+    }
+
+    public void setString(String s) throws InvalidHeaderException {
+        setValue(MimeType.valueOf(s));
+    }
+
+    public String getString() {
+        return getValue().toString();
+    }
+
+    public boolean isUDACompliant() {
+        // UDA spec says "must be text/xml", however, sometimes you get a charset token as well...
+        return isText() && getValue().getSubtype().equals(DEFAULT_CONTENT_TYPE.getSubtype());
+    }
+
+    public boolean isText() {
+        return getValue() != null && getValue().getType().equals(DEFAULT_CONTENT_TYPE.getType());
+    }
+}

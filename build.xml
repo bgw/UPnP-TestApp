@@ -1,0 +1,48 @@
+<project name="UPnP-TestApp" default="dist" basedir=".">
+  <description>
+    A server and client program that will simply test a few UPnP features using
+    Super Bonbon's UPNPLib
+  </description>
+  
+  <!-- set global properties for this build -->
+  <property name="lib-src" location="lib-src"/>
+  <property name="lib-bin" location="lib-bin"/>
+  <property name="src" location="src"/>
+  <property name="bin" location="bin"/>
+  <property name="docs" location="docs"/>
+  
+  <target name="init" depends="clean">
+    <tstamp/>
+    <mkdir dir="${bin}"/>
+    <!--copies the binary libraries to the bin dir-->
+    <copy todir="${bin}">
+      <fileset dir="${lib-bin}">
+        <include name="**/*.class"/>
+      </fileset>
+    </copy>
+    <unjar dest="${bin}">
+      <fileset dir="${lib-bin}">
+        <include name="**/*.jar"/>
+      </fileset>
+    </unjar>
+    <!--mkdir dir="${docs}"/-->
+  </target>
+  
+  <target name="compile" depends="init"
+      description="compile the source">
+    <echo message="Compiling Libraries"/>
+    <javac srcdir="${lib-src}" destdir="${bin}" nowarn="on"/>
+    <echo message="Compiling TestApp"/>
+    <javac srcdir="${src}" destdir="${bin}"/>
+  </target>
+  
+  <target name="dist" depends="compile"
+        description="generate the distribution" >
+  </target>
+  
+  <target name="clean"
+        description="clean up" >
+    <delete dir="${bin}"/>
+    <!--delete dir="${docs}"/-->
+  </target>
+</project>
