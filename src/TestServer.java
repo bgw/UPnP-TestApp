@@ -1,4 +1,5 @@
 import org.teleal.cling.binding.annotations.*;
+import org.teleal.common.util.ByteArray;
 import java.util.Random;
 import java.util.zip.CRC32;
 
@@ -14,25 +15,29 @@ import java.util.zip.CRC32;
 )
 public class TestServer {
   
-  @UpnpStateVariable(datatype = "byte[]", sendEvents = false)
-  private byte[] data = new byte[1024*1024]; //one MB of data
+  @UpnpStateVariable(sendEvents = false)
+  private Byte[] data;
   
-  @UpnpStateVariable(datatype = "java.util.zip.CRC32", sendEvents = false)
-  private CRC32 checksum = new CRC32();
+  @UpnpStateVariable(sendEvents = false)
+  private Integer checksum;
   
   public TestServer() {
-    new Random().nextBytes(data);
-    checksum.update(data);
+    byte[] rawData = new byte[1024*1024]; //one MB of data
+    new Random().nextBytes(rawData);
+    data = ByteArray.toWrapper(rawData);
+    CRC32 crc = new CRC32();
+    crc.update(rawData);
+    checksum = (int)crc.getValue(); // autoboxing!
   }
   
   
   @UpnpAction(out = @UpnpOutputArgument(name = "DataChecksum"))
-  public long getChecksum() {
-    return checksum.getValue();
+  public Integer getChecksum() {
+    return checksum;
   }
   
   @UpnpAction(out = @UpnpOutputArgument(name = "RandomData"))
-  public byte[] getData() {
+  public Byte[] getData() {
     return data;
   }
 }

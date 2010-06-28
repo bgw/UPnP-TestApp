@@ -50,7 +50,7 @@ public class TestApp {
       UDN.uniqueSystemIdentifier("Test UPnP App (Java/Cling)")
     );
     DeviceType type = new UDADeviceType("UPnPTest", 1);
-
+    
     DeviceDetails details = new DeviceDetails(
       "UPnP Test App (Java/Cling)",
       new ManufacturerDetails("pipeep"),
@@ -59,13 +59,14 @@ public class TestApp {
                                       "v1")
     );
     Icon icon = null;
+    
     DeviceService<LocalService> deviceService =
       new AnnotationLocalServiceBinder().read(TestServer.class);
     
     deviceService.getService().setManager(
       new DefaultServiceManager(deviceService.getService(), TestServer.class)
     );
-
+    
     return new LocalDevice(
             identity,
             type,
