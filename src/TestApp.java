@@ -1,18 +1,19 @@
 import org.teleal.cling.UpnpService;
 import org.teleal.cling.UpnpServiceImpl;
-import org.teleal.cling.binding.*;
-import org.teleal.cling.binding.annotations.*;
-import org.teleal.cling.model.*;
-import org.teleal.cling.model.meta.*;
-import org.teleal.cling.model.types.*;
-import org.teleal.cling.model.message.header.STAllHeader;
-import org.teleal.cling.registry.DefaultRegistryListener;
-import org.teleal.cling.registry.RegistryListener;
-import org.teleal.cling.DefaultUpnpServiceConfiguration;
-import org.teleal.cling.registry.Registry;
-import org.teleal.cling.model.action.ActionInvocation;
-import org.teleal.cling.controlpoint.ActionCallback;
-import org.teleal.cling.model.message.UpnpResponse;
+import org.teleal.cling.model.meta.LocalDevice;
+import org.teleal.cling.model.meta.DeviceIdentity;
+import org.teleal.cling.model.meta.DeviceDetails;
+import org.teleal.cling.model.meta.DeviceService;
+import org.teleal.cling.model.meta.LocalService;
+import org.teleal.cling.model.types.DeviceType;
+import org.teleal.cling.model.meta.ModelDetails;
+import org.teleal.cling.model.meta.ManufacturerDetails;
+import org.teleal.cling.model.ValidationException;
+import org.teleal.cling.binding.LocalServiceBindingException;
+import org.teleal.cling.binding.annotations.AnnotationLocalServiceBinder;
+import org.teleal.cling.model.DefaultServiceManager;
+import org.teleal.cling.model.types.UDN; // UUID
+import org.teleal.cling.model.meta.Icon;
 import java.io.IOException;
 
 /**
@@ -32,17 +33,16 @@ public class TestApp {
     }
   }
   
-  //This method is almost copied exactly from the example documentation
+  // This method is almost copied exactly from the example documentation
   public static void runServer() {
     try {
       final UpnpService upnpService = new UpnpServiceImpl();
       Runtime.getRuntime().addShutdownHook(new Thread() {
-        @Override
         public void run() {
           upnpService.shutdown();
         }
       });
-      //Add the bound local device to the registry
+      // Add the bound local device to the registry
       upnpService.getRegistry().addDevice(createDevice());
     } catch (Exception ex) {
       System.err.println("Exception occured: " + ex);
@@ -58,7 +58,7 @@ public class TestApp {
     DeviceIdentity identity = new DeviceIdentity(
       UDN.uniqueSystemIdentifier("Test UPnP App (Java/Cling)")
     );
-    DeviceType type = new UDADeviceType("UPnPTest", 1);
+    DeviceType type = new DeviceType("pipeep", "UPnPTest", 1);
     
     DeviceDetails details = new DeviceDetails(
       "UPnP Test App (Java/Cling)",
