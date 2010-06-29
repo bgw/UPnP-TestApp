@@ -25,9 +25,7 @@ public class TestServer {
     byte[] rawData = new byte[1024*1024]; //one MB of data
     new Random().nextBytes(rawData);
     data = ByteArray.toWrapper(rawData);
-    CRC32 crc = new CRC32();
-    crc.update(rawData);
-    checksum = (int)crc.getValue(); // autoboxing!
+    checksum = calculateChecksum(rawData); //Autoboxing!
   }
   
   
@@ -39,5 +37,15 @@ public class TestServer {
   @UpnpAction(out = @UpnpOutputArgument(name = "RandomData"))
   public Byte[] getData() {
     return data;
+  }
+  
+  public static int calculateChecksum(Byte[] data) {
+    return calculateChecksum(ByteArray.toPrimitive(data));
+  }
+  
+  public static int calculateChecksum(byte[] data) {
+    CRC32 crc = new CRC32();
+    crc.update(data);
+    return (int)crc.getValue();
   }
 }
