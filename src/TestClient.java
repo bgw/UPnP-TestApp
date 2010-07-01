@@ -11,6 +11,7 @@ import org.teleal.cling.model.message.header.STAllHeader;
 import org.teleal.cling.model.message.UpnpResponse;
 import org.teleal.cling.model.action.ActionInvocation;
 import org.teleal.cling.controlpoint.ActionCallback;
+import org.teleal.common.util.Base64Coder;
 
 public class TestClient {
   private UpnpService upnpService;
@@ -81,18 +82,19 @@ public class TestClient {
                   new GetDataActionInvocation(service, "GetData", "RandomData");
     ActionInvocation getChecksum =
             new GetDataActionInvocation(service, "GetChecksum", "DataChecksum");
-    final Byte[][] data = new Byte[1][0]; // making this a 2d array is a cheap
-                                          // hack to allow this to work with
-                                          // inner classes
+    final String[] data = new String[1]; // making this an array is a cheap
+                                         // hack to allow this to work with
+                                         // inner classes
     
     //GetChecksum
     final ActionCallback getChecksumCallback = new ActionCallback(getChecksum) {
       public void success(ActionInvocation actionInvocation) {
-        System.out.println("Read checksum from server, comparing to data...");
         int serverChecksum = // leave it to Java to make things really verbose
           ((Integer)((GetDataActionInvocation)actionInvocation).getData())
                     .intValue();
-        if(TestServer.calculateChecksum(data[0]) == serverChecksum) {
+        System.out.println("Checksum: " + serverChecksum);
+        System.out.println("Read checksum from server, comparing to data...");
+        if(TestServer.calculateChecksum(Base64Coder.decode(data[0])) == serverChecksum) {
           System.out.println("Match!");
         } else {
           System.out.println("Failure.");
@@ -107,7 +109,7 @@ public class TestClient {
     ActionCallback getDataCallback = new ActionCallback(getData) {
       public void success(ActionInvocation actionInvocation) {
         System.out.println("Read data from server, reading checksum...");
-        data[0] = (Byte[])((GetDataActionInvocation)actionInvocation).getData();
+        data[0] = (String)((GetDataActionInvocation)actionInvocation).getData();
         upnpService.getControlPoint().execute(getChecksumCallback);
       }
       public void failure(ActionInvocation actionInvoc, UpnpResponse oper) {

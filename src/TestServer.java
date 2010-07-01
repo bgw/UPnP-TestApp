@@ -1,5 +1,6 @@
 import org.teleal.cling.binding.annotations.*;
 import org.teleal.common.util.ByteArray;
+import org.teleal.common.util.Base64Coder;
 import java.util.Random;
 import java.util.zip.CRC32;
 
@@ -24,7 +25,7 @@ public class TestServer {
   public TestServer() {
     byte[] rawData = new byte[1024*1024]; //one MB of data
     new Random().nextBytes(rawData);
-    data = new String(rawData);
+    data = new String(Base64Coder.encode(rawData));
     checksum = calculateChecksum(rawData); //Autoboxing!
   }
   
