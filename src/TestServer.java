@@ -15,16 +15,16 @@ import java.util.zip.CRC32;
 )
 public class TestServer {
   
-  @UpnpStateVariable(name = "RandomData", sendEvents = false)
-  private Byte[] data;
+  @UpnpStateVariable(sendEvents = false)
+  private String data;
   
-  @UpnpStateVariable(name = "DataChecksum", sendEvents = false)
+  @UpnpStateVariable(sendEvents = false)
   private Integer checksum;
   
   public TestServer() {
     byte[] rawData = new byte[1024*1024]; //one MB of data
     new Random().nextBytes(rawData);
-    data = ByteArray.toWrapper(rawData);
+    data = new String(rawData);
     checksum = calculateChecksum(rawData); //Autoboxing!
   }
   
@@ -35,7 +35,7 @@ public class TestServer {
   }
   
   @UpnpAction(out = @UpnpOutputArgument(name = "RandomData"))
-  public Byte[] getData() {
+  public String getData() {
     return data;
   }
   
