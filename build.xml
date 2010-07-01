@@ -25,6 +25,7 @@
         <include name="**/*.jar"/>
       </fileset>
     </unjar>
+    <copy file="${lib-bin}/default-logging.properties" toDir="${bin}"/>
     <!--mkdir dir="${docs}"/-->
   </target>
   

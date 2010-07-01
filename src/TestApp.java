@@ -22,7 +22,11 @@ import java.io.IOException;
 
 public class TestApp {
   public static void main(String[] args) {
-    java.util.logging.Logger.getLogger("").setLevel(java.util.logging.Level.ALL);
+    try {
+      org.teleal.common.logging.LoggingUtil.loadDefaultConfiguration();
+    } catch(java.io.IOException ex) {
+      System.out.println("Failed to load logging file");
+    }
     if(args.length > 0 && args[0].equals("client")) {
       new TestClient().run();
     } else if(args.length > 0 && args[0].equals("server")) {
