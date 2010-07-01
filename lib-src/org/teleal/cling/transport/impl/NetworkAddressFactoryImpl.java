@@ -55,7 +55,13 @@ public class NetworkAddressFactoryImpl implements NetworkAddressFactory {
     protected List<NetworkInterface> networkInterfaces = new ArrayList();
     protected List<InetAddress> bindAddresses = new ArrayList();
 
+    protected int streamListenPort;
+
     public NetworkAddressFactoryImpl() throws InitializationException {
+        this(DEFAULT_TCP_HTTP_LISTEN_PORT);
+    }
+
+    public NetworkAddressFactoryImpl(int streamListenPort) throws InitializationException {
 
         String useInterfacesString = System.getProperty(SYSTEM_PROPERTY_NET_IFACES);
         if (useInterfacesString != null) {
@@ -82,6 +88,8 @@ public class NetworkAddressFactoryImpl implements NetworkAddressFactory {
         if (networkInterfaces.size() == 0 || bindAddresses.size() == 0) {
             throw new InitializationException("Could not discover any bindable network interfaces and/or addresses");
         }
+
+        this.streamListenPort = streamListenPort;
     }
 
     public InetAddress getMulticastGroup() {
@@ -97,7 +105,7 @@ public class NetworkAddressFactoryImpl implements NetworkAddressFactory {
     }
 
     public int getStreamListenPort() {
-        return DEFAULT_TCP_HTTP_LISTEN_PORT;
+        return streamListenPort;
     }
 
     public NetworkInterface[] getNetworkInterfaces() {
@@ -116,18 +124,18 @@ public class NetworkAddressFactoryImpl implements NetworkAddressFactory {
         }
     }
 
-    public InterfaceAddress getInterfaceAddress(InetAddress inetAddress) {
-        for (NetworkInterface networkInterface : networkInterfaces) {
-            for (InterfaceAddress interfaceAddress : networkInterface.getInterfaceAddresses()) {
+    public InetAddress getBroadcastAddress(InetAddress inetAddress) {
+        for (NetworkInterface iface : networkInterfaces) {
+            for (InterfaceAddress interfaceAddress : getInterfaceAddresses(iface)) {
                 if (interfaceAddress != null && interfaceAddress.getAddress().equals(inetAddress)) {
-                    return interfaceAddress;
+                    return interfaceAddress.getBroadcast();
                 }
             }
         }
         return null;
     }
 
-    public InetAddress getLocalInterfaceAddress(NetworkInterface networkInterface, boolean isIPv6, InetAddress remoteAddress) {
+    public InetAddress getLocalAddress(NetworkInterface networkInterface, boolean isIPv6, InetAddress remoteAddress) {
 
         // First try to find a local IP that is in the same subnet as the remote IP
         InetAddress localIPInSubnet = getBindAddressInSubnetOf(remoteAddress);
@@ -143,7 +151,7 @@ public class NetworkAddressFactoryImpl implements NetworkAddressFactory {
         log.finer("Could not find local bind address in same subnet as: " + remoteAddress.getHostAddress());
         
         // Next, just take the given interface (which is really totally random) and get the first address that we like
-        for (InetAddress interfaceAddress: Collections.list(networkInterface.getInetAddresses())) {
+        for (InetAddress interfaceAddress: getInetAddresses(networkInterface)) {
             if (isIPv6 && interfaceAddress instanceof Inet6Address)
                 return interfaceAddress;
             if (!isIPv6 && interfaceAddress instanceof Inet4Address)
@@ -152,10 +160,18 @@ public class NetworkAddressFactoryImpl implements NetworkAddressFactory {
         throw new IllegalStateException("Can't find any IPv4 or IPv6 address on interface: " + networkInterface.getDisplayName());
     }
 
+    protected List<InterfaceAddress> getInterfaceAddresses(NetworkInterface networkInterface) {
+        return networkInterface.getInterfaceAddresses();
+    }
+
+    protected List<InetAddress> getInetAddresses(NetworkInterface networkInterface) {
+        return Collections.list(networkInterface.getInetAddresses());
+    }
+
     protected InetAddress getBindAddressInSubnetOf(InetAddress inetAddress) {
 
         for (NetworkInterface iface : networkInterfaces) {
-            for (InterfaceAddress ifaceAddress : iface.getInterfaceAddresses()) {
+            for (InterfaceAddress ifaceAddress : getInterfaceAddresses(iface)) {
 
                 if (!bindAddresses.contains(ifaceAddress.getAddress())) {
                     continue;
@@ -209,7 +225,7 @@ public class NetworkAddressFactoryImpl implements NetworkAddressFactory {
                     log.fine("Discovered usable network interface: " + iface.getDisplayName());
                     networkInterfaces.add(iface);
                 } else {
-                    log.finer("Ignorning non-usable network interface: " + iface.getDisplayName());
+                    log.finer("Ignoring non-usable network interface: " + iface.getDisplayName());
                 }
             }
 
@@ -253,12 +269,11 @@ public class NetworkAddressFactoryImpl implements NetworkAddressFactory {
             for (NetworkInterface networkInterface : networkInterfaces) {
 
                 log.finer("Discovering addresses of interface: " + networkInterface.getDisplayName());
-                for (InterfaceAddress interfaceAddress : networkInterface.getInterfaceAddresses()) {
-                    if (interfaceAddress == null) {
-                        log.warning("Network has a null interface address: " + networkInterface.getDisplayName());
+                for (InetAddress inetAddress : getInetAddresses(networkInterface)) {
+                    if (inetAddress == null) {
+                        log.warning("Network has a null address: " + networkInterface.getDisplayName());
                         continue;
                     }
-                    InetAddress inetAddress = interfaceAddress.getAddress();
 
                     if (isUsableAddress(networkInterface, inetAddress)) {
                         log.fine("Discovered usable network interface address: " + inetAddress.getHostAddress());

@@ -28,18 +28,14 @@ import org.teleal.cling.model.message.UpnpRequest;
 import org.teleal.cling.model.message.UpnpResponse;
 import org.teleal.cling.transport.spi.DatagramProcessor;
 import org.teleal.cling.transport.spi.UnsupportedDataException;
+import org.teleal.common.http.Headers;
 
 import java.io.ByteArrayInputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
-import java.util.List;
-
 
 public class DatagramProcessorImpl implements DatagramProcessor {
-
-    final static byte CR = 13;
-    final static byte LF = 10;
 
     private static Logger log = Logger.getLogger(DatagramProcessor.class.getName());
 
@@ -57,7 +53,7 @@ public class DatagramProcessorImpl implements DatagramProcessor {
 
             // Start line
             // TODO: This throws out of memory exception if there is only one line!
-            String[] startLine = readLine(is).split(" ");
+            String[] startLine = Headers.readLine(is).split(" ");
             if (!startLine[0].startsWith("HTTP/1.")) {
 
                 return readRequestMessage(receivedOnAddress, datagram, is, startLine[0], startLine[2]);
@@ -98,8 +94,7 @@ public class DatagramProcessorImpl implements DatagramProcessor {
         StringBuilder messageData = new StringBuilder();
         messageData.append(statusLine);
 
-        String headerString = HttpHeaderConverter.convertHeaders(message.getHeaders());
-        messageData.append(headerString).append("\r\n");
+        messageData.append(message.getHeaders().toString()).append("\r\n");
 
         if (log.isLoggable(Level.FINER)) {
             log.finer("Writing message data for: " + message);
@@ -128,7 +123,7 @@ public class DatagramProcessorImpl implements DatagramProcessor {
                                                          String httpProtocol) throws Exception {
 
         // Headers
-        HttpHeaders headers = readHeaders(is);
+        Headers headers = new Headers(is);
 
         // Assemble message
         IncomingDatagramMessage requestMessage;
@@ -136,7 +131,7 @@ public class DatagramProcessorImpl implements DatagramProcessor {
         upnpRequest.setHttpMinorVersion(httpProtocol.toUpperCase().equals("HTTP/1.1") ? 1 : 0);
         requestMessage = new IncomingDatagramMessage(upnpRequest, datagram.getAddress(), datagram.getPort(), receivedOnAddress);
 
-        requestMessage.setHeaders(new UpnpHeaders(HttpHeaderConverter.convertHeaders(headers)));
+        requestMessage.setHeaders(new UpnpHeaders(headers));
 
         return requestMessage;
     }
@@ -149,8 +144,7 @@ public class DatagramProcessorImpl implements DatagramProcessor {
                                                           String httpProtocol) throws Exception {
 
         // Headers
-        HttpHeaders headers = readHeaders(is);
-
+        Headers headers = new Headers(is);
 
         // Assemble the message
         IncomingDatagramMessage responseMessage;
@@ -158,111 +152,10 @@ public class DatagramProcessorImpl implements DatagramProcessor {
         upnpResponse.setHttpMinorVersion(httpProtocol.toUpperCase().equals("HTTP/1.1") ? 1 : 0);
         responseMessage = new IncomingDatagramMessage(upnpResponse, datagram.getAddress(), datagram.getPort(), receivedOnAddress);
 
-        responseMessage.setHeaders(new UpnpHeaders(HttpHeaderConverter.convertHeaders(headers)));
+        responseMessage.setHeaders(new UpnpHeaders(headers));
 
         return responseMessage;
     }
 
-
-    protected HttpHeaders readHeaders(ByteArrayInputStream is) {
-        HttpHeaders headers = new HttpHeaders();
-        String line = readLine(is);
-        String lastHeader = null;
-        if (line.length() != 0) {
-            do {
-                char firstChar = line.charAt(0);
-                if (lastHeader != null && (firstChar == ' ' || firstChar == '\t')) {
-                    List<String> current = headers.get(lastHeader);
-                    int lastPos = current.size() - 1;
-                    String newString = current.get(lastPos) + line.trim();
-                    current.set(lastPos, newString);
-                } else {
-                    String[] header = splitHeader(line);
-                    headers.add(header[0], header[1]);
-                    lastHeader = header[0];
-                }
-
-                line = readLine(is);
-            } while (line.length() != 0);
-        }
-        return headers;
-    }
-
-    protected String readLine(ByteArrayInputStream is) {
-        StringBuilder sb = new StringBuilder(64);
-        loop:
-        for (; ;) {
-            char nextByte = (char) is.read();
-
-            switch (nextByte) {
-                case CR:
-                    nextByte = (char) is.read();
-                    if (nextByte == LF) {
-                        break loop;
-                    }
-                    break;
-                case LF:
-                    break loop;
-            }
-
-            sb.append(nextByte);
-        }
-        return sb.toString();
-    }
-
-    protected String[] splitHeader(String sb) {
-        int nameStart;
-        int nameEnd;
-        int colonEnd;
-        int valueStart;
-        int valueEnd;
-
-        nameStart = findNonWhitespace(sb, 0);
-        for (nameEnd = nameStart; nameEnd < sb.length(); nameEnd++) {
-            char ch = sb.charAt(nameEnd);
-            if (ch == ':' || Character.isWhitespace(ch)) {
-                break;
-            }
-        }
-
-        for (colonEnd = nameEnd; colonEnd < sb.length(); colonEnd++) {
-            if (sb.charAt(colonEnd) == ':') {
-                colonEnd++;
-                break;
-            }
-        }
-
-        valueStart = findNonWhitespace(sb, colonEnd);
-        valueEnd = findEndOfString(sb);
-
-        // This gets a bit messy because there are really HTTP headers without values (go figure...)
-        return new String[]
-                {
-                        sb.substring(nameStart, nameEnd),
-                        sb.length() >= valueStart && sb.length() >= valueEnd && valueStart < valueEnd
-                                ? sb.substring(valueStart, valueEnd)
-                                : null
-                };
-    }
-
-    protected int findNonWhitespace(String sb, int offset) {
-        int result;
-        for (result = offset; result < sb.length(); result++) {
-            if (!Character.isWhitespace(sb.charAt(result))) {
-                break;
-            }
-        }
-        return result;
-    }
-
-    protected int findEndOfString(String sb) {
-        int result;
-        for (result = sb.length(); result > 0; result--) {
-            if (!Character.isWhitespace(sb.charAt(result - 1))) {
-                break;
-            }
-        }
-        return result;
-    }
 
 }

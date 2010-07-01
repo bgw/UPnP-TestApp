@@ -189,10 +189,12 @@ public class RouterImpl implements Router {
 
     public void broadcast(byte[] bytes) {
         for (Map.Entry<InetAddress, DatagramIO> entry : getDatagramIOs().entrySet()) {
-            InetAddress broadcast = getNetworkAddressFactory().getInterfaceAddress(entry.getKey()).getBroadcast();
-            log.fine("Sending UDP datagram to broadcast address: " + broadcast.getHostAddress());
-            DatagramPacket packet = new DatagramPacket(bytes, bytes.length, broadcast, 9);
-            entry.getValue().send(packet);
+            InetAddress broadcast = getNetworkAddressFactory().getBroadcastAddress(entry.getKey());
+            if (broadcast != null) {
+                log.fine("Sending UDP datagram to broadcast address: " + broadcast.getHostAddress());
+                DatagramPacket packet = new DatagramPacket(bytes, bytes.length, broadcast, 9);
+                entry.getValue().send(packet);
+            }
         }
     }
 }

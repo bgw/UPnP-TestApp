@@ -102,7 +102,7 @@ public class MulticastReceiverImpl implements MulticastReceiver<MulticastReceive
                 socket.receive(datagram);
 
                 InetAddress receivedOnLocalAddress =
-                        router.getNetworkAddressFactory().getLocalInterfaceAddress(
+                        router.getNetworkAddressFactory().getLocalAddress(
                                 multicastInterface,
                                 multicastAddress.getAddress() instanceof Inet6Address,
                                 datagram.getAddress()

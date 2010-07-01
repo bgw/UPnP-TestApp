@@ -23,19 +23,21 @@ import org.teleal.cling.binding.xml.DeviceDescriptorBinder;
 import org.teleal.cling.binding.xml.ServiceDescriptorBinder;
 import org.teleal.cling.model.ValidationError;
 import org.teleal.cling.model.ValidationException;
-import org.teleal.cling.model.meta.DeviceService;
-import org.teleal.cling.model.meta.RemoteDevice;
-import org.teleal.cling.model.meta.RemoteService;
 import org.teleal.cling.model.message.StreamRequestMessage;
 import org.teleal.cling.model.message.StreamResponseMessage;
 import org.teleal.cling.model.message.UpnpRequest;
 import org.teleal.cling.model.message.header.ContentTypeHeader;
 import org.teleal.cling.model.message.header.UpnpHeader;
+import org.teleal.cling.model.meta.DeviceService;
+import org.teleal.cling.model.meta.RemoteDevice;
+import org.teleal.cling.model.meta.RemoteService;
 import org.teleal.cling.registry.RegistrationException;
 
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.logging.Logger;
 
 public class RetrieveRemoteDescriptors implements Runnable {
@@ -44,6 +46,8 @@ public class RetrieveRemoteDescriptors implements Runnable {
 
     private final UpnpService upnpService;
     private RemoteDevice rd;
+
+    private static final Set<URL> activeRetrievals = new CopyOnWriteArraySet();
 
     public RetrieveRemoteDescriptors(UpnpService upnpService, RemoteDevice rd) {
         this.upnpService = upnpService;
@@ -55,6 +59,32 @@ public class RetrieveRemoteDescriptors implements Runnable {
     }
 
     public void run() {
+
+        URL deviceURL = rd.getIdentity().getDescriptorURL();
+
+        // Performance optimization, try to avoid concurrent GET requests for device descriptor,
+        // if we retrieve it once, we have the hydrated device. There is no different outcome
+        // processing this several times concurrently.
+
+        if (activeRetrievals.contains(deviceURL)) {
+            log.finer("Exiting early, active retrieval for URL already in progress: " + deviceURL);
+            return;
+        }
+
+        try {
+            activeRetrievals.add(deviceURL);
+            describe();
+        } finally {
+            activeRetrievals.remove(deviceURL);
+        }
+    }
+
+    protected void describe() {
+
+        // All of the following is a very expensive and time consuming procedure, thanks to the
+        // braindead design of UPnP. Several GET requests, several descriptors, several XML parsing
+        // steps - all of this could be done with one and it wouldn't make a difference. So every
+        // call of this method has to be really necessary and rare.
 
         StreamRequestMessage deviceDescRetrievalMsg =
                 new StreamRequestMessage(UpnpRequest.Method.GET, rd.getIdentity().getDescriptorURL());
@@ -119,7 +149,7 @@ public class RetrieveRemoteDescriptors implements Runnable {
         }
     }
 
-    protected RemoteDevice describeServicesRecursive(RemoteDevice rootDevice, RemoteDevice currentDevice) 
+    protected RemoteDevice describeServicesRecursive(RemoteDevice rootDevice, RemoteDevice currentDevice)
             throws DescriptorBindingException, ValidationException {
 
         List<DeviceService> describedServices = new ArrayList();

@@ -45,7 +45,8 @@ public class TestClient {
   
   //Listener for clients connecting
   private class ClientListener extends DefaultRegistryListener {
-    private final ServiceId SERVICE_ID = new ServiceId("pipeep", "UPnPTestServer-JavaCling");
+    private final ServiceId SERVICE_ID =
+                            new ServiceId("pipeep", "UPnPTestServer-JavaCling");
     
     public ClientListener() {
     }
@@ -53,11 +54,11 @@ public class TestClient {
     public void remoteDeviceAdded(Registry registry, RemoteDevice device) {
       DeviceService testServer;
       System.out.println("Remote device discovered: " + device);
-      DeviceService[] services = device.getDeviceServices();
+      DeviceService[] services = device.findDeviceServices();
       for(DeviceService i : services) {
         System.out.println("  contains service:" + i.getServiceId().getId());
       }
-      if ((testServer = device.getDeviceService(SERVICE_ID)) != null) {
+      if ((testServer = device.findDeviceService(SERVICE_ID)) != null) {
         System.out.println("Test Server Service discovered: " + testServer);
         executeAction(testServer.getService());
       }
@@ -66,7 +67,7 @@ public class TestClient {
     public void remoteDeviceRemoved(Registry registry, RemoteDevice device) {
       DeviceService testServer;
       System.out.println("Remote device disappeared: " + device);
-      if ((testServer = device.getDeviceService(SERVICE_ID)) != null) {
+      if ((testServer = device.findDeviceService(SERVICE_ID)) != null) {
         System.out.println("Service disappeared: " + testServer);
       }
     }

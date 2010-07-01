@@ -173,7 +173,7 @@ public class RegistryImpl implements Registry {
     synchronized public DeviceService getDeviceService(ServiceReference serviceReference) {
         Device device;
         if ((device = getDevice(serviceReference.getUdn(), false)) != null) {
-            return device.getDeviceService(serviceReference.getServiceId());
+            return device.findDeviceService(serviceReference.getServiceId());
         }
         return null;
     }

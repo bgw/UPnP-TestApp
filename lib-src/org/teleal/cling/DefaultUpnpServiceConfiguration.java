@@ -57,24 +57,14 @@ public class DefaultUpnpServiceConfiguration implements UpnpServiceConfiguration
 
     final private int streamListenPort;
 
-    final private ThreadPoolExecutor defaultExecutor;
+    final private Executor defaultExecutor;
 
     final private DatagramProcessor datagramProcessor;
     final private SOAPActionProcessor soapActionProcessor;
     final private GENAEventProcessor genaEventProcessor;
 
-    final private Executor multicastReceiverExecutor;
-    final private Executor datagramIOExecutor;
-    final private Executor streamServerExecutor;
-
     final private DeviceDescriptorBinder deviceDescriptorBinderUDA10;
     final private ServiceDescriptorBinder serviceDescriptorBinderUDA10;
-
-    final private Executor asyncProtocolExecutor;
-    final private Executor syncProtocolExecutor;
-
-    final private Executor registryMaintainerExecutor;
-    final private Executor registryListenerExecutor;
 
     public DefaultUpnpServiceConfiguration() {
         this(NetworkAddressFactoryImpl.DEFAULT_TCP_HTTP_LISTEN_PORT);
@@ -84,47 +74,14 @@ public class DefaultUpnpServiceConfiguration implements UpnpServiceConfiguration
 
         this.streamListenPort = streamListenPort;
 
-        defaultExecutor = new ThreadPoolExecutor(8, 64, 30, TimeUnit.SECONDS, new ArrayBlockingQueue(128)) {
-            @Override
-            protected void beforeExecute(Thread thread, Runnable runnable) {
-                super.beforeExecute(thread, runnable);
-                thread.setName("Thread " + thread.getId() + " (Active: " + getActiveCount() + ")");
-            }
-        };
+        defaultExecutor = createDefaultExecutor();
 
-        defaultExecutor.setRejectedExecutionHandler(
-                new ThreadPoolExecutor.DiscardPolicy() {
-                    @Override
-                    public void rejectedExecution(Runnable runnable, ThreadPoolExecutor threadPoolExecutor) {
+        datagramProcessor = createDatagramProcessor();
+        soapActionProcessor = createSOAPActionProcessor();
+        genaEventProcessor = createGENAEventProcessor();
 
-                        // Log and discard
-                        log.warning(
-                                "Thread pool saturated, discarding execution " +
-                                "of '"+runnable.getClass()+"', consider raising the " +
-                                "maximum pool or queue size"
-                        );
-                        super.rejectedExecution(runnable, threadPoolExecutor);
-                    }
-                }
-        );
-
-        datagramProcessor = new DatagramProcessorImpl();
-        soapActionProcessor = new SOAPActionProcessorImpl();
-        genaEventProcessor = new GENAEventProcessorImpl();
-
-        multicastReceiverExecutor = createDefaultExecutor();
-        datagramIOExecutor = createDefaultExecutor();
-        streamServerExecutor = createDefaultExecutor();
-
-        deviceDescriptorBinderUDA10 = new UDA10DeviceDescriptorBinderImpl();
-        serviceDescriptorBinderUDA10 = new UDA10ServiceDescriptorBinderImpl();
-
-        asyncProtocolExecutor = createDefaultExecutor();
-        syncProtocolExecutor = createDefaultExecutor();
-
-        registryMaintainerExecutor = createDefaultExecutor();
-        registryListenerExecutor = createDefaultExecutor();
-
+        deviceDescriptorBinderUDA10 = createDeviceDescriptorBinderUDA10();
+        serviceDescriptorBinderUDA10 = createServiceDescriptorBinderUDA10();
     }
 
     public DatagramProcessor getDatagramProcessor() {
@@ -170,15 +127,15 @@ public class DefaultUpnpServiceConfiguration implements UpnpServiceConfiguration
     }
 
     public Executor getMulticastReceiverExecutor() {
-        return multicastReceiverExecutor;
+        return getDefaultExecutor();
     }
 
     public Executor getDatagramIOExecutor() {
-        return datagramIOExecutor;
+        return getDefaultExecutor();
     }
 
     public Executor getStreamServerExecutor() {
-        return streamServerExecutor;
+        return getDefaultExecutor();
     }
 
     public DeviceDescriptorBinder getDeviceDescriptorBinderUDA10() {
@@ -190,41 +147,77 @@ public class DefaultUpnpServiceConfiguration implements UpnpServiceConfiguration
     }
 
     public Executor getAsyncProtocolExecutor() {
-        return asyncProtocolExecutor;
+        return getDefaultExecutor();
     }
 
     public Executor getSyncProtocolExecutor() {
-        return syncProtocolExecutor;
+        return getDefaultExecutor();
     }
 
     public Executor getRegistryMaintainerExecutor() {
-        return registryMaintainerExecutor;
+        return getDefaultExecutor();
     }
 
     public Executor getRegistryListenerExecutor() {
-        return registryListenerExecutor;
+        return getDefaultExecutor();
     }
 
     public NetworkAddressFactory createNetworkAddressFactory() {
-        return new NetworkAddressFactoryImpl() {
-            @Override
-            public int getStreamListenPort() {
-                return streamListenPort;
-            }
-        };
+        return createNetworkAddressFactory(streamListenPort);
     }
 
-    /**
-     * @return An executor that spawns a new thread for each task.
-     */
-    protected Executor createDefaultExecutor() {
+    protected NetworkAddressFactory createNetworkAddressFactory(int streamListenPort) {
+        return new NetworkAddressFactoryImpl(streamListenPort);
+    }
+
+    protected DatagramProcessor createDatagramProcessor() {
+        return new DatagramProcessorImpl();
+    }
+
+    protected SOAPActionProcessor createSOAPActionProcessor() {
+        return new SOAPActionProcessorImpl();
+    }
+
+    protected GENAEventProcessor createGENAEventProcessor() {
+        return new GENAEventProcessorImpl();
+    }
+
+    protected DeviceDescriptorBinder createDeviceDescriptorBinderUDA10() {
+        return new UDA10DeviceDescriptorBinderImpl();
+    }
+
+    protected ServiceDescriptorBinder createServiceDescriptorBinderUDA10() {
+        return new UDA10ServiceDescriptorBinderImpl();
+    }
+
+    protected Executor getDefaultExecutor() {
         return defaultExecutor;
-/*
-        return new Executor() {
-            public void execute(Runnable r) {
-                new Thread(r).start();
+    }
+
+    protected Executor createDefaultExecutor() {
+        ThreadPoolExecutor defaultExecutor = new ThreadPoolExecutor(8, 64, 30, TimeUnit.SECONDS, new ArrayBlockingQueue(128)) {
+            @Override
+            protected void beforeExecute(Thread thread, Runnable runnable) {
+                super.beforeExecute(thread, runnable);
+                thread.setName("Thread " + thread.getId() + " (Active: " + getActiveCount() + ")");
             }
         };
-*/
+
+        defaultExecutor.setRejectedExecutionHandler(
+                new ThreadPoolExecutor.DiscardPolicy() {
+                    @Override
+                    public void rejectedExecution(Runnable runnable, ThreadPoolExecutor threadPoolExecutor) {
+
+                        // Log and discard
+                        log.warning(
+                                "Thread pool saturated, discarding execution " +
+                                "of '"+runnable.getClass()+"', consider raising the " +
+                                "maximum pool or queue size"
+                        );
+                        super.rejectedExecution(runnable, threadPoolExecutor);
+                    }
+                }
+        );
+        return defaultExecutor;
     }
 }

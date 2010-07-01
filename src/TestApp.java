@@ -22,9 +22,10 @@ import java.io.IOException;
 
 public class TestApp {
   public static void main(String[] args) {
-    if(args[0].equals("client")) {
+    java.util.logging.Logger.getLogger("").setLevel(java.util.logging.Level.ALL);
+    if(args.length > 0 && args[0].equals("client")) {
       new TestClient().run();
-    } else if(args[0].equals("server")) {
+    } else if(args.length > 0 && args[0].equals("server")) {
       runServer();
     } else {
       System.out.println("Usage: java TestApp <mode>");

@@ -37,7 +37,7 @@ public class DeviceTypeHeader extends UpnpHeader<DeviceType> {
 
     public void setString(String s) throws InvalidHeaderException {
         try {
-            setValue(DeviceType.fromString(s));
+            setValue(DeviceType.valueOf(s));
         } catch (RuntimeException ex) {
             throw new InvalidHeaderException("Invalid device type header value, " + ex.getMessage());
         }

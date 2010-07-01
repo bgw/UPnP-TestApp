@@ -17,8 +17,6 @@
 
 package org.teleal.cling.model.types;
 
-import org.teleal.cling.model.types.UDN;
-
 
 public class NamedServiceType {
 
@@ -46,12 +44,12 @@ public class NamedServiceType {
 
         UDN udn;
         try {
-            udn = UDN.fromString(strings[0]);
+            udn = UDN.valueOf(strings[0]);
         } catch (Exception ex) {
             throw new RuntimeException("Can't parse UDN: " + strings[0]);
         }
 
-        ServiceType serviceType = ServiceType.fromString(strings[1]);
+        ServiceType serviceType = ServiceType.valueOf(strings[1]);
         return new NamedServiceType(udn, serviceType);
     }
 

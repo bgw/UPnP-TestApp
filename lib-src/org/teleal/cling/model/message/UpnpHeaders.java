@@ -17,8 +17,12 @@
 
 package org.teleal.cling.model.message;
 
+import org.teleal.cling.model.message.header.ContentTypeHeader;
+import org.teleal.cling.model.message.header.MANHeader;
 import org.teleal.cling.model.message.header.UpnpHeader;
+import org.teleal.common.http.Headers;
 
+import java.net.HttpURLConnection;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,10 +30,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.HashMap;
-
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class UpnpHeaders implements Map<UpnpHeader.Type, List<UpnpHeader>> {
 
+    private static Logger log = Logger.getLogger(UpnpHeaders.class.getName());
+
+    // TODO: I forgot why I did this... obviously it was necessary to have namespaces here, but why?
     private Map<UpnpHeader.Type, String> prefixes = new HashMap();
 
     private Map<UpnpHeader.Type, List<UpnpHeader>> map;
@@ -40,6 +48,10 @@ public class UpnpHeaders implements Map<UpnpHeader.Type, List<UpnpHeader>> {
 
     public UpnpHeaders(Map<UpnpHeader.Type, List<UpnpHeader>> map) {
         this.map = map;
+    }
+
+    public UpnpHeaders(Headers headers) {
+        this.map = toUpnpHeaders(headers);
     }
 
     public int size() {
@@ -144,4 +156,164 @@ public class UpnpHeaders implements Map<UpnpHeader.Type, List<UpnpHeader>> {
     public String getPrefixedHttpName(UpnpHeader.Type key) {
         return getPrefix(key) != null  ? prefixes.get(key) + "-" + key.getHttpName() : key.getHttpName();
     }
+
+    public boolean containsTextContentType() {
+        List<UpnpHeader> contentTypeHeaders = get(UpnpHeader.Type.CONTENT_TYPE);
+        if (contentTypeHeaders == null) return true;
+        for (UpnpHeader upnpHeader : contentTypeHeaders) {
+            if (upnpHeader instanceof ContentTypeHeader) {
+                ContentTypeHeader contentTypeHeader = (ContentTypeHeader) upnpHeader;
+                if (contentTypeHeader.isText()) return true;
+            }
+        }
+        return false;
+    }
+
+    public Headers toHttpHeaders() {
+        Headers httpHeaders = new Headers();
+        for (Map.Entry<UpnpHeader.Type, List<UpnpHeader>> headerEntry : entrySet()) {
+            for (UpnpHeader upnpHeader : headerEntry.getValue()) {
+                httpHeaders.add(
+                        getPrefixedHttpName(headerEntry.getKey()),
+                        upnpHeader.getString()
+                );
+            }
+        }
+        return httpHeaders;
+    }
+
+    public void applyTo(HttpURLConnection urlConnection) {
+        for (Map.Entry<UpnpHeader.Type, List<UpnpHeader>> headerEntry : entrySet()) {
+            for (UpnpHeader upnpHeader : headerEntry.getValue()) {
+                urlConnection.setRequestProperty(getPrefixedHttpName(headerEntry.getKey()), upnpHeader.getString());
+            }
+        }
+    }
+
+    public String toString() {
+        StringBuilder headerString = new StringBuilder();
+        for (Map.Entry<UpnpHeader.Type, List<UpnpHeader>> headerEntry : entrySet()) {
+            StringBuilder headerLine = new StringBuilder();
+
+            headerLine.append(getPrefixedHttpName(headerEntry.getKey())).append(": ");
+
+            for (UpnpHeader upnpHeader : headerEntry.getValue()) {
+                headerLine.append(upnpHeader.getString()).append(",");
+            }
+            headerLine.delete(headerLine.length()-1, headerLine.length());
+            headerString.append(headerLine).append("\r\n");
+        }
+        return headerString.toString();
+    }
+
+    protected UpnpHeaders toUpnpHeaders(Headers rawHeaders) {
+
+        UpnpHeaders headers = new UpnpHeaders();
+
+        log.fine("Converting HTTP message headers into UPnP message headers: " + rawHeaders.size());
+
+        Headers knownHeaders = new Headers();
+        Headers unknownHeaders = new Headers();
+
+        for (Map.Entry<String, List<String>> entry : rawHeaders.entrySet()) {
+
+            log.fine("Converting raw HTTP header: " + entry.getKey());
+
+            String rawHeaderName = entry.getKey();
+
+            // Fantastic, the JDK HTTPURLConnection returns "null" headers
+            if (rawHeaderName == null) {
+                log.finer("Skipping null...");
+                continue;
+            }
+
+            String rawHeaderValue = rawHeaders.getFirstHeader(rawHeaderName);
+
+            UpnpHeader.Type upnpHeaderType = UpnpHeader.Type.getByHttpName(rawHeaderName.toUpperCase());
+
+            if (upnpHeaderType == null) {
+                log.finer("Will try later to parse unknown request header '" + rawHeaderName + "' with value '" + rawHeaderValue + "'");
+                unknownHeaders.put(rawHeaderName, rawHeaders.get(rawHeaderName));
+            } else {
+                knownHeaders.put(rawHeaderName, rawHeaders.get(rawHeaderName));
+            }
+        }
+
+        for (Map.Entry<String, List<String>> entry : knownHeaders.entrySet()) {
+
+            String headerName = entry.getKey();
+            String headerValue = knownHeaders.getFirstHeader(headerName);
+
+            UpnpHeader.Type upnpHeaderType = UpnpHeader.Type.getByHttpName(headerName.toUpperCase());
+            UpnpHeader upnpHeader = UpnpHeader.newInstance(upnpHeaderType, headerValue);
+
+            if (upnpHeader == null || upnpHeader.getValue() == null) {
+                log.fine("Ignoring known but non-parsable header (value violates the UDA specification?) '"+ headerName + "': " + headerValue);
+            } else {
+                log.fine("Adding parsed header to UPnP message: " + upnpHeader);
+                headers.add(upnpHeaderType, upnpHeader);
+            }
+        }
+
+        Map<String, String> headerNamespaces = new HashMap();
+        if (headers.get(UpnpHeader.Type.MAN) != null) {
+            for (UpnpHeader h : headers.get(UpnpHeader.Type.MAN)) {
+                MANHeader manHeader = (MANHeader)h;
+                if (manHeader.getNamespace() != null) {
+                    headerNamespaces.put(manHeader.getNamespace(), manHeader.getValue());
+                }
+            }
+        }
+
+        for (Map.Entry<String, List<String>> entry : unknownHeaders.entrySet()) {
+
+            String headerName = entry.getKey();
+            String headerValue = unknownHeaders.getFirstHeader(headerName);
+
+            if (!headerName.matches("[0-9]{2}-.+")) {
+                log.fine("Ignoring unknown header: '"+ headerName + "': " + headerValue);
+                continue;
+            }
+
+            String prefix = headerName.substring(0, 2);
+            headerName = headerName.substring(3);
+
+            if (!headerNamespaces.containsKey(prefix)) {
+                log.fine("Ignoring extension header with unknown namespace prefix: '"+ headerName + "': " + headerValue);
+                continue;
+            }
+
+            UpnpHeader.Type upnpHeaderType = UpnpHeader.Type.getByHttpName(headerName.toUpperCase());
+            if (upnpHeaderType == null) {
+                log.fine("Unknown namespaced request header: " + headerName + ", value: " + headerValue);
+                continue;
+            }
+
+            UpnpHeader upnpHeader = UpnpHeader.newInstance(upnpHeaderType, headerValue);
+
+            if (upnpHeader == null || upnpHeader.getValue() == null) {
+                log.fine("Ignoring known but non-parsable namespaced header (value violates the UDA specification?) '"+ headerName + "': " + headerValue);
+            } else {
+                log.fine("Adding namespaced parsed header to UPnP message with prefix '"+prefix+"': " + upnpHeader);
+                headers.add(upnpHeaderType, upnpHeader);
+                headers.setPrefix(upnpHeaderType, prefix);
+            }
+        }
+
+        return headers;
+    }
+
+    public void logHeaders() {
+        if (log.isLoggable(Level.FINE)) {
+            log.fine("########################## HEADERS ##########################");
+            for (Map.Entry<UpnpHeader.Type, List<UpnpHeader>> entry : entrySet()) {
+                log.fine("=== TYPE: " + entry.getKey());
+                for (UpnpHeader upnpHeader : entry.getValue()) {
+                    log.fine("HEADER: " + upnpHeader);
+                }
+            }
+            log.fine("#############################################################");
+        }
+    }
+
 }

@@ -31,13 +31,23 @@ import org.teleal.cling.model.meta.Icon;
 import org.teleal.cling.model.types.ServiceId;
 import org.teleal.cling.model.types.ServiceType;
 import org.teleal.cling.model.types.UDN;
-import org.teleal.common.xml.ParserException;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.StringReader;
 import java.net.URI;
 import java.net.URL;
 import java.util.logging.Logger;
 
-
+/**
+ * Implementation based on DOM.
+ *
+ * @author Christian Bauer
+ */
 public class UDA10DeviceDescriptorBinderImpl implements DeviceDescriptorBinder {
 
     private static Logger log = Logger.getLogger(DeviceDescriptorBinder.class.getName());
@@ -61,11 +71,18 @@ public class UDA10DeviceDescriptorBinderImpl implements DeviceDescriptorBinder {
 
             // And by the way... try this with JAXB instead of manual DOM processing! And you thought it couldn't get worse....
 
-            DeviceDOM dom = getParser().parse(descriptorXml, false);
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+
+            Document d = factory.newDocumentBuilder().parse(
+                    new InputSource(
+                            new StringReader(descriptorXml)
+                    )
+            );
 
             // Read the XML into a mutable descriptor graph
             MutableDeviceDescriptor descriptor = new MutableDeviceDescriptor();
-            DeviceElement rootElement = dom.getRoot(getParser().createXPath());
+            Element rootElement = d.getDocumentElement();
             hydrateRoot(descriptor, rootElement);
 
             // Build the immutable descriptor graph
@@ -76,173 +93,224 @@ public class UDA10DeviceDescriptorBinderImpl implements DeviceDescriptorBinder {
         } catch (Exception ex) {
             throw new DescriptorBindingException("Could not parse device descriptor: " + ex.toString(), ex);
         }
+
     }
 
-    protected void hydrateRoot(MutableDeviceDescriptor descriptor, DeviceElement rootElement) throws DescriptorBindingException, ParserException {
+    protected void hydrateRoot(MutableDeviceDescriptor descriptor, Element rootElement) throws DescriptorBindingException {
 
-        if (!rootElement.getW3CElement().getNamespaceURI().equals(DeviceDOM.NAMESPACE_URI)) {
+        if (!rootElement.getNamespaceURI().equals(DeviceDOM.NAMESPACE_URI)) {
             throw new DescriptorBindingException("Wrong XML namespace declared on root element: "
-                    + rootElement.getW3CElement().getNamespaceURI());
+                    + rootElement.getNamespaceURI());
         }
 
-        if (!rootElement.getElementName().equals(ELEMENT.root.name())) {
-            throw new DescriptorBindingException("Root element name is not <root>: " + rootElement.getElementName());
+        if (!rootElement.getNodeName().equals(ELEMENT.root.name())) {
+            throw new DescriptorBindingException("Root element name is not <root>: " + rootElement.getNodeName());
         }
 
-        DeviceElement rootDeviceElement = null;
+        NodeList rootChildren = rootElement.getChildNodes();
 
-        DeviceElement[] rootChildren = rootElement.getChildren();
-        for (DeviceElement rootChild : rootChildren) {
+        Node deviceNode = null;
 
-            if (rootChild.equals(ELEMENT.specVersion)) {
+        for (int i = 0; i < rootChildren.getLength(); i++) {
+            Node rootChild = rootChildren.item(i);
+
+            if (rootChild.getNodeType() != Node.ELEMENT_NODE)
+                continue;
+
+            if (ELEMENT.specVersion.equals(rootChild)) {
                 hydrateSpecVersion(descriptor, rootChild);
-            } else if (rootChild.equals(ELEMENT.URLBase)) {
+            } else if (ELEMENT.URLBase.equals(rootChild)) {
                 try {
                     // We hope it's  RFC 2396 and RFC 2732 compliant
-                    descriptor.baseURL = new URL(rootChild.getContent());
+                    descriptor.baseURL = new URL(rootChild.getTextContent());
                 } catch (Exception ex) {
-                    throw new DescriptorBindingException("Invalid URLBase: " + ex.toString());
+                    throw new DescriptorBindingException("Invalid URLBase: " + ex.getMessage());
                 }
-            } else if (rootChild.equals(ELEMENT.device)) {
+            } else if (ELEMENT.device.equals(rootChild)) {
                 // Just sanity check here...
-                if (rootDeviceElement != null)
+                if (deviceNode != null)
                     throw new DescriptorBindingException("Found multiple <device> elements in <root>");
-                rootDeviceElement = rootChild;
+                deviceNode = rootChild;
             } else {
-                log.finer("Ignoring unknown element: " + rootChild.getElementName());
+                log.finer("Ignoring unknown element: " + rootChild.getNodeName());
             }
         }
 
-        if (rootDeviceElement == null) {
+        if (deviceNode == null) {
             throw new DescriptorBindingException("No <device> element in <root>");
         }
-        hydrateDevice(descriptor, rootDeviceElement);
+        hydrateDevice(descriptor, deviceNode);
     }
 
-    public void hydrateSpecVersion(MutableDeviceDescriptor descriptor, DeviceElement specVersionElement)
-            throws DescriptorBindingException, ParserException {
+    public void hydrateSpecVersion(MutableDeviceDescriptor descriptor, Node specVersionNode) throws DescriptorBindingException {
 
-        descriptor.udaMajorVersion =
-                Integer.valueOf(specVersionElement.getRequiredChild(ELEMENT.major.name()).getContent());
-        descriptor.udaMinorVersion =
-                Integer.valueOf(specVersionElement.getRequiredChild(ELEMENT.minor.name()).getContent());
+        NodeList specVersionChildren = specVersionNode.getChildNodes();
+        for (int i = 0; i < specVersionChildren.getLength(); i++) {
+            Node specVersionChild = specVersionChildren.item(i);
+
+            if (specVersionChild.getNodeType() != Node.ELEMENT_NODE)
+                continue;
+
+            if (ELEMENT.major.equals(specVersionChild)) {
+                descriptor.udaVersion.major = Integer.valueOf(specVersionChild.getTextContent());
+            } else if (ELEMENT.minor.equals(specVersionChild)) {
+                descriptor.udaVersion.minor = Integer.valueOf(specVersionChild.getTextContent());
+            }
+
+        }
+
     }
 
-    public void hydrateDevice(MutableDeviceDescriptor descriptor, DeviceElement deviceElement) throws DescriptorBindingException {
+    public void hydrateDevice(MutableDeviceDescriptor descriptor, Node deviceNode) throws DescriptorBindingException {
 
-        DeviceElement[] deviceElementChildren = deviceElement.getChildren();
-        for (DeviceElement deviceElementChild : deviceElementChildren) {
+        NodeList deviceNodeChildren = deviceNode.getChildNodes();
+        for (int i = 0; i < deviceNodeChildren.getLength(); i++) {
+            Node deviceNodeChild = deviceNodeChildren.item(i);
 
-            if (deviceElementChild.equals(ELEMENT.deviceType)) {
-                descriptor.deviceType = deviceElementChild.getContent();
-            } else if (deviceElementChild.equals(ELEMENT.friendlyName)) {
-                descriptor.friendlyName = deviceElementChild.getContent();
-            } else if (deviceElementChild.equals(ELEMENT.manufacturer)) {
-                descriptor.manufacturer = deviceElementChild.getContent();
-            } else if (deviceElementChild.equals(ELEMENT.manufacturerURL)) {
+            if (deviceNodeChild.getNodeType() != Node.ELEMENT_NODE)
+                continue;
+
+            if (ELEMENT.deviceType.equals(deviceNodeChild)) {
+                descriptor.deviceType = deviceNodeChild.getTextContent();
+            } else if (ELEMENT.friendlyName.equals(deviceNodeChild)) {
+                descriptor.friendlyName = deviceNodeChild.getTextContent();
+            } else if (ELEMENT.manufacturer.equals(deviceNodeChild)) {
+                descriptor.manufacturer = deviceNodeChild.getTextContent();
+            } else if (ELEMENT.manufacturerURL.equals(deviceNodeChild)) {
                 // TODO: UPNP VIOLATION: Netgear DG834 uses a non-URI: 'www.netgear.com'
-                if (deviceElementChild.getContent().startsWith("www.")) {
-                    descriptor.manufacturerURI = URI.create("http://" + deviceElementChild.getContent());
+                if (deviceNodeChild.getTextContent().startsWith("www.")) {
+                    descriptor.manufacturerURI = URI.create("http://" + deviceNodeChild.getTextContent());
                 } else {
-                    descriptor.manufacturerURI = URI.create(deviceElementChild.getContent());
+                    descriptor.manufacturerURI = URI.create(deviceNodeChild.getTextContent());
                 }
-            } else if (deviceElementChild.equals(ELEMENT.modelDescription)) {
-                descriptor.modelDescription = deviceElementChild.getContent();
-            } else if (deviceElementChild.equals(ELEMENT.modelName)) {
-                descriptor.modelName = deviceElementChild.getContent();
-            } else if (deviceElementChild.equals(ELEMENT.modelNumber)) {
-                descriptor.modelNumber = deviceElementChild.getContent();
-            } else if (deviceElementChild.equals(ELEMENT.modelURL)) {
+            } else if (ELEMENT.modelDescription.equals(deviceNodeChild)) {
+                descriptor.modelDescription = deviceNodeChild.getTextContent();
+            } else if (ELEMENT.modelName.equals(deviceNodeChild)) {
+                descriptor.modelName = deviceNodeChild.getTextContent();
+            } else if (ELEMENT.modelNumber.equals(deviceNodeChild)) {
+                descriptor.modelNumber = deviceNodeChild.getTextContent();
+            } else if (ELEMENT.modelURL.equals(deviceNodeChild)) {
                 // TODO: UPNP VIOLATION: Netgear DG834 uses a non-URI: 'www.netgear.com'
-                if (deviceElementChild.getContent().startsWith("www.")) {
-                    descriptor.modelURI = URI.create("http://" + deviceElementChild.getContent());
+                if (deviceNodeChild.getTextContent().startsWith("www.")) {
+                    descriptor.modelURI = URI.create("http://" + deviceNodeChild.getTextContent());
                 } else {
-                    descriptor.modelURI = URI.create(deviceElementChild.getContent());
+                    descriptor.modelURI = URI.create(deviceNodeChild.getTextContent());
                 }
-            } else if (deviceElementChild.equals(ELEMENT.presentationURL)) {
-                descriptor.presentationURI = URI.create(deviceElementChild.getContent());
-            } else if (deviceElementChild.equals(ELEMENT.UPC)) {
-                descriptor.upc = deviceElementChild.getContent();
-            } else if (deviceElementChild.equals(ELEMENT.serialNumber)) {
-                descriptor.serialNumber = deviceElementChild.getContent();
-            } else if (deviceElementChild.equals(ELEMENT.UDN)) {
-                descriptor.udn = UDN.fromString(deviceElementChild.getContent());
-            } else if (deviceElementChild.equals(ELEMENT.iconList)) {
-                hydrateIconList(descriptor, deviceElementChild);
-            } else if (deviceElementChild.equals(ELEMENT.serviceList)) {
-                hydrateServiceList(descriptor, deviceElementChild);
-            } else if (deviceElementChild.equals(ELEMENT.deviceList)) {
-                hydrateDeviceList(descriptor, deviceElementChild);
+            } else if (ELEMENT.presentationURL.equals(deviceNodeChild)) {
+                descriptor.presentationURI = URI.create(deviceNodeChild.getTextContent());
+            } else if (ELEMENT.UPC.equals(deviceNodeChild)) {
+                descriptor.upc = deviceNodeChild.getTextContent();
+            } else if (ELEMENT.serialNumber.equals(deviceNodeChild)) {
+                descriptor.serialNumber = deviceNodeChild.getTextContent();
+            } else if (ELEMENT.UDN.equals(deviceNodeChild)) {
+                descriptor.udn = UDN.valueOf(deviceNodeChild.getTextContent());
+            } else if (ELEMENT.iconList.equals(deviceNodeChild)) {
+                hydrateIconList(descriptor, deviceNodeChild);
+            } else if (ELEMENT.serviceList.equals(deviceNodeChild)) {
+                hydrateServiceList(descriptor, deviceNodeChild);
+            } else if (ELEMENT.deviceList.equals(deviceNodeChild)) {
+                hydrateDeviceList(descriptor, deviceNodeChild);
             }
         }
     }
 
-    public void hydrateIconList(MutableDeviceDescriptor descriptor, DeviceElement iconsElement) throws DescriptorBindingException {
+    public void hydrateIconList(MutableDeviceDescriptor descriptor, Node iconListNode) throws DescriptorBindingException {
 
-        DeviceElement[] iconsChildren = iconsElement.getChildren(ELEMENT.icon.name());
-        for (DeviceElement iconElement : iconsChildren) {
+        NodeList iconListNodeChildren = iconListNode.getChildNodes();
+        for (int i = 0; i < iconListNodeChildren.getLength(); i++) {
+            Node iconListNodeChild = iconListNodeChildren.item(i);
 
-            MutableIcon icon = new MutableIcon();
+            if (iconListNodeChild.getNodeType() != Node.ELEMENT_NODE)
+                continue;
 
-            DeviceElement[] iconChildren = iconElement.getChildren();
-            for (DeviceElement iconChild : iconChildren) {
+            if (ELEMENT.icon.equals(iconListNodeChild)) {
 
-                if (iconChild.equals(ELEMENT.width)) {
-                    icon.width = (Integer.valueOf(iconChild.getContent()));
-                } else if (iconChild.equals(ELEMENT.height)) {
-                    icon.height = (Integer.valueOf(iconChild.getContent()));
-                } else if (iconChild.equals(ELEMENT.depth)) {
-                    icon.depth = (Integer.valueOf(iconChild.getContent()));
-                } else if (iconChild.equals(ELEMENT.url)) {
-                    icon.uri = (URI.create(iconChild.getContent()));
-                } else if (iconChild.equals(ELEMENT.mimetype)) {
-                    icon.mimeType = iconChild.getContent();
+                MutableIcon icon = new MutableIcon();
+
+                NodeList iconChildren = iconListNodeChild.getChildNodes();
+
+                for (int x = 0; x < iconChildren.getLength(); x++) {
+                    Node iconChild = iconChildren.item(x);
+
+                    if (iconChild.getNodeType() != Node.ELEMENT_NODE)
+                        continue;
+
+                    if (ELEMENT.width.equals(iconChild)) {
+                        icon.width = (Integer.valueOf(iconChild.getTextContent()));
+                    } else if (ELEMENT.height.equals(iconChild)) {
+                        icon.height = (Integer.valueOf(iconChild.getTextContent()));
+                    } else if (ELEMENT.depth.equals(iconChild)) {
+                        icon.depth = (Integer.valueOf(iconChild.getTextContent()));
+                    } else if (ELEMENT.url.equals(iconChild)) {
+                        icon.uri = (URI.create(iconChild.getTextContent()));
+                    } else if (ELEMENT.mimetype.equals(iconChild)) {
+                        icon.mimeType = iconChild.getTextContent();
+                    }
+
                 }
 
+                descriptor.icons.add(icon);
             }
-
-            descriptor.icons.add(icon);
         }
     }
 
-    public void hydrateServiceList(MutableDeviceDescriptor descriptor, DeviceElement servicesElement) throws DescriptorBindingException {
+    public void hydrateServiceList(MutableDeviceDescriptor descriptor, Node serviceListNode) throws DescriptorBindingException {
 
-        DeviceElement[] serviceElements = servicesElement.getChildren(ELEMENT.service.name());
-        for (DeviceElement serviceElement : serviceElements) {
+        NodeList serviceListNodeChildren = serviceListNode.getChildNodes();
+        for (int i = 0; i < serviceListNodeChildren.getLength(); i++) {
+            Node serviceListNodeChild = serviceListNodeChildren.item(i);
 
-            MutableDeviceService service = new MutableDeviceService();
+            if (serviceListNodeChild.getNodeType() != Node.ELEMENT_NODE)
+                continue;
 
-            DeviceElement[] serviceChildren = serviceElement.getChildren();
+            if (ELEMENT.service.equals(serviceListNodeChild)) {
 
-            for (DeviceElement serviceChild : serviceChildren) {
+                MutableDeviceService service = new MutableDeviceService();
 
-                if (serviceChild.equals(ELEMENT.serviceType)) {
-                    service.serviceType = (ServiceType.fromString(serviceChild.getContent()));
-                } else if (serviceChild.equals(ELEMENT.serviceId)) {
-                    service.serviceId = (ServiceId.fromString(serviceChild.getContent()));
-                } else if (serviceChild.equals(ELEMENT.SCPDURL)) {
-                    service.descriptorURI = (URI.create(serviceChild.getContent()));
-                } else if (serviceChild.equals(ELEMENT.controlURL)) {
-                    service.controlURI = (URI.create(serviceChild.getContent()));
-                } else if (serviceChild.equals(ELEMENT.eventSubURL)) {
-                    service.eventSubscriptionURI = (URI.create(serviceChild.getContent()));
+                NodeList serviceChildren = serviceListNodeChild.getChildNodes();
+
+                for (int x = 0; x < serviceChildren.getLength(); x++) {
+                    Node serviceChild = serviceChildren.item(x);
+
+                    if (serviceChild.getNodeType() != Node.ELEMENT_NODE)
+                        continue;
+
+                    if (ELEMENT.serviceType.equals(serviceChild)) {
+                        service.serviceType = (ServiceType.valueOf(serviceChild.getTextContent()));
+                    } else if (ELEMENT.serviceId.equals(serviceChild)) {
+                        service.serviceId = (ServiceId.valueOf(serviceChild.getTextContent()));
+                    } else if (ELEMENT.SCPDURL.equals(serviceChild)) {
+                        service.descriptorURI = (URI.create(serviceChild.getTextContent()));
+                    } else if (ELEMENT.controlURL.equals(serviceChild)) {
+                        service.controlURI = (URI.create(serviceChild.getTextContent()));
+                    } else if (ELEMENT.eventSubURL.equals(serviceChild)) {
+                        service.eventSubscriptionURI = (URI.create(serviceChild.getTextContent()));
+                    }
+
                 }
 
+                descriptor.deviceServices.add(service);
             }
-
-            descriptor.deviceServices.add(service);
         }
     }
 
-    public void hydrateDeviceList(MutableDeviceDescriptor descriptor, DeviceElement devicesElement) throws DescriptorBindingException {
+    public void hydrateDeviceList(MutableDeviceDescriptor descriptor, Node deviceListNode) throws DescriptorBindingException {
 
-        DeviceElement[] deviceElements = devicesElement.getChildren(ELEMENT.device.name());
-        for (DeviceElement deviceElement : deviceElements) {
-            MutableDeviceDescriptor embeddedDevice = new MutableDeviceDescriptor();
-            embeddedDevice.parentDevice = descriptor;
-            descriptor.embeddedDevices.add(embeddedDevice);
-            hydrateDevice(embeddedDevice, deviceElement);
+        NodeList deviceListNodeChildren = deviceListNode.getChildNodes();
+        for (int i = 0; i < deviceListNodeChildren.getLength(); i++) {
+            Node deviceListNodeChild = deviceListNodeChildren.item(i);
+
+            if (deviceListNodeChild.getNodeType() != Node.ELEMENT_NODE)
+                continue;
+
+            if (ELEMENT.device.equals(deviceListNodeChild)) {
+                MutableDeviceDescriptor embeddedDevice = new MutableDeviceDescriptor();
+                embeddedDevice.parentDevice = descriptor;
+                descriptor.embeddedDevices.add(embeddedDevice);
+                hydrateDevice(embeddedDevice, deviceListNodeChild);
+            }
         }
+
     }
 
 
@@ -383,3 +451,202 @@ public class UDA10DeviceDescriptorBinderImpl implements DeviceDescriptorBinder {
     }
 
 }
+
+
+/*
+
+The original implementation, based on the teleal-common XML parser wrapper. This wrapper is
+unfortunately much slower on Android (probably because it is using XPath and the Android
+XML parser implementations are all horribly slow anyway.) It is not much slower on Sun JDK
+on a regular x86 machine!
+
+    public <D extends Device> D describe(D undescribedDevice, String descriptorXml) throws DescriptorBindingException, ValidationException {
+
+        try {
+            log.fine("Populating device from XML descriptor: " + undescribedDevice);
+
+            DeviceDOM dom = getParser().parse(descriptorXml, false);
+
+            // Read the XML into a mutable descriptor graph
+            MutableDeviceDescriptor descriptor = new MutableDeviceDescriptor();
+            DeviceElement rootElement = dom.getRoot(getParser().createXPath());
+            hydrateRoot(descriptor, rootElement);
+
+            // Build the immutable descriptor graph
+            return (D) descriptor.build(undescribedDevice);
+
+        } catch (ValidationException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new DescriptorBindingException("Could not parse device descriptor: " + ex.toString(), ex);
+        }
+    }
+
+    protected void hydrateRoot(MutableDeviceDescriptor descriptor, DeviceElement rootElement) throws DescriptorBindingException, ParserException {
+
+        if (!rootElement.getW3CElement().getNamespaceURI().equals(DeviceDOM.NAMESPACE_URI)) {
+            throw new DescriptorBindingException("Wrong XML namespace declared on root element: "
+                    + rootElement.getW3CElement().getNamespaceURI());
+        }
+
+        if (!rootElement.getElementName().equals(ELEMENT.root.name())) {
+            throw new DescriptorBindingException("Root element name is not <root>: " + rootElement.getElementName());
+        }
+
+        DeviceElement rootDeviceElement = null;
+
+        DeviceElement[] rootChildren = rootElement.getChildren();
+        for (DeviceElement rootChild : rootChildren) {
+
+            if (rootChild.equals(ELEMENT.specVersion)) {
+                hydrateSpecVersion(descriptor, rootChild);
+            } else if (rootChild.equals(ELEMENT.URLBase)) {
+                try {
+                    // We hope it's  RFC 2396 and RFC 2732 compliant
+                    descriptor.baseURL = new URL(rootChild.getContent());
+                } catch (Exception ex) {
+                    throw new DescriptorBindingException("Invalid URLBase: " + ex.toString());
+                }
+            } else if (rootChild.equals(ELEMENT.device)) {
+                // Just sanity check here...
+                if (rootDeviceElement != null)
+                    throw new DescriptorBindingException("Found multiple <device> elements in <root>");
+                rootDeviceElement = rootChild;
+            } else {
+                log.finer("Ignoring unknown element: " + rootChild.getElementName());
+            }
+        }
+
+        if (rootDeviceElement == null) {
+            throw new DescriptorBindingException("No <device> element in <root>");
+        }
+        hydrateDevice(descriptor, rootDeviceElement);
+    }
+
+    public void hydrateSpecVersion(MutableDeviceDescriptor descriptor, DeviceElement specVersionElement)
+            throws DescriptorBindingException, ParserException {
+
+        descriptor.udaVersion.major =
+                Integer.valueOf(specVersionElement.getRequiredChild(ELEMENT.major.name()).getContent());
+        descriptor.udaVersion.minor =
+                Integer.valueOf(specVersionElement.getRequiredChild(ELEMENT.minor.name()).getContent());
+    }
+
+    public void hydrateDevice(MutableDeviceDescriptor descriptor, DeviceElement deviceElement) throws DescriptorBindingException {
+
+        DeviceElement[] deviceElementChildren = deviceElement.getChildren();
+        for (DeviceElement deviceElementChild : deviceElementChildren) {
+
+            if (deviceElementChild.equals(ELEMENT.deviceType)) {
+                descriptor.deviceType = deviceElementChild.getContent();
+            } else if (deviceElementChild.equals(ELEMENT.friendlyName)) {
+                descriptor.friendlyName = deviceElementChild.getContent();
+            } else if (deviceElementChild.equals(ELEMENT.manufacturer)) {
+                descriptor.manufacturer = deviceElementChild.getContent();
+            } else if (deviceElementChild.equals(ELEMENT.manufacturerURL)) {
+                // TODO: UPNP VIOLATION: Netgear DG834 uses a non-URI: 'www.netgear.com'
+                if (deviceElementChild.getContent().startsWith("www.")) {
+                    descriptor.manufacturerURI = URI.create("http://" + deviceElementChild.getContent());
+                } else {
+                    descriptor.manufacturerURI = URI.create(deviceElementChild.getContent());
+                }
+            } else if (deviceElementChild.equals(ELEMENT.modelDescription)) {
+                descriptor.modelDescription = deviceElementChild.getContent();
+            } else if (deviceElementChild.equals(ELEMENT.modelName)) {
+                descriptor.modelName = deviceElementChild.getContent();
+            } else if (deviceElementChild.equals(ELEMENT.modelNumber)) {
+                descriptor.modelNumber = deviceElementChild.getContent();
+            } else if (deviceElementChild.equals(ELEMENT.modelURL)) {
+                // TODO: UPNP VIOLATION: Netgear DG834 uses a non-URI: 'www.netgear.com'
+                if (deviceElementChild.getContent().startsWith("www.")) {
+                    descriptor.modelURI = URI.create("http://" + deviceElementChild.getContent());
+                } else {
+                    descriptor.modelURI = URI.create(deviceElementChild.getContent());
+                }
+            } else if (deviceElementChild.equals(ELEMENT.presentationURL)) {
+                descriptor.presentationURI = URI.create(deviceElementChild.getContent());
+            } else if (deviceElementChild.equals(ELEMENT.UPC)) {
+                descriptor.upc = deviceElementChild.getContent();
+            } else if (deviceElementChild.equals(ELEMENT.serialNumber)) {
+                descriptor.serialNumber = deviceElementChild.getContent();
+            } else if (deviceElementChild.equals(ELEMENT.UDN)) {
+                descriptor.udn = UDN.valueOf(deviceElementChild.getContent());
+            } else if (deviceElementChild.equals(ELEMENT.iconList)) {
+                hydrateIconList(descriptor, deviceElementChild);
+            } else if (deviceElementChild.equals(ELEMENT.serviceList)) {
+                hydrateServiceList(descriptor, deviceElementChild);
+            } else if (deviceElementChild.equals(ELEMENT.deviceList)) {
+                hydrateDeviceList(descriptor, deviceElementChild);
+            }
+        }
+    }
+
+    public void hydrateIconList(MutableDeviceDescriptor descriptor, DeviceElement iconsElement) throws DescriptorBindingException {
+
+        DeviceElement[] iconsChildren = iconsElement.getChildren(ELEMENT.icon.name());
+        for (DeviceElement iconElement : iconsChildren) {
+
+            MutableIcon icon = new MutableIcon();
+
+            DeviceElement[] iconChildren = iconElement.getChildren();
+            for (DeviceElement iconChild : iconChildren) {
+
+                if (iconChild.equals(ELEMENT.width)) {
+                    icon.width = (Integer.valueOf(iconChild.getContent()));
+                } else if (iconChild.equals(ELEMENT.height)) {
+                    icon.height = (Integer.valueOf(iconChild.getContent()));
+                } else if (iconChild.equals(ELEMENT.depth)) {
+                    icon.depth = (Integer.valueOf(iconChild.getContent()));
+                } else if (iconChild.equals(ELEMENT.url)) {
+                    icon.uri = (URI.create(iconChild.getContent()));
+                } else if (iconChild.equals(ELEMENT.mimetype)) {
+                    icon.mimeType = iconChild.getContent();
+                }
+
+            }
+
+            descriptor.icons.add(icon);
+        }
+    }
+
+    public void hydrateServiceList(MutableDeviceDescriptor descriptor, DeviceElement servicesElement) throws DescriptorBindingException {
+
+        DeviceElement[] serviceElements = servicesElement.getChildren(ELEMENT.service.name());
+        for (DeviceElement serviceElement : serviceElements) {
+
+            MutableDeviceService service = new MutableDeviceService();
+
+            DeviceElement[] serviceChildren = serviceElement.getChildren();
+
+            for (DeviceElement serviceChild : serviceChildren) {
+
+                if (serviceChild.equals(ELEMENT.serviceType)) {
+                    service.serviceType = (ServiceType.valueOf(serviceChild.getContent()));
+                } else if (serviceChild.equals(ELEMENT.serviceId)) {
+                    service.serviceId = (ServiceId.valueOf(serviceChild.getContent()));
+                } else if (serviceChild.equals(ELEMENT.SCPDURL)) {
+                    service.descriptorURI = (URI.create(serviceChild.getContent()));
+                } else if (serviceChild.equals(ELEMENT.controlURL)) {
+                    service.controlURI = (URI.create(serviceChild.getContent()));
+                } else if (serviceChild.equals(ELEMENT.eventSubURL)) {
+                    service.eventSubscriptionURI = (URI.create(serviceChild.getContent()));
+                }
+
+            }
+
+            descriptor.deviceServices.add(service);
+        }
+    }
+
+    public void hydrateDeviceList(MutableDeviceDescriptor descriptor, DeviceElement devicesElement) throws DescriptorBindingException {
+
+        DeviceElement[] deviceElements = devicesElement.getChildren(ELEMENT.device.name());
+        for (DeviceElement deviceElement : deviceElements) {
+            MutableDeviceDescriptor embeddedDevice = new MutableDeviceDescriptor();
+            embeddedDevice.parentDevice = descriptor;
+            descriptor.embeddedDevices.add(embeddedDevice);
+            hydrateDevice(embeddedDevice, deviceElement);
+        }
+    }
+
+*/

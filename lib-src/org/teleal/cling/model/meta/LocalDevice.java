@@ -208,4 +208,17 @@ public class LocalDevice extends Device<DeviceIdentity, LocalDevice, LocalServic
         Collection<LocalDevice> col = find(serviceType, this);
         return col.size() > 0 ? col.toArray(new LocalDevice[col.size()]) : null;
     }
+
+    @Override
+    public DeviceService<LocalService>[] findDeviceServices() {
+        Collection<DeviceService> col = findDeviceServices(null, null, this);
+        return col.size() > 0 ? col.toArray(new DeviceService[col.size()]) : null;
+    }
+
+    @Override
+    public DeviceService<LocalService>[] findDeviceServices(ServiceType serviceType) {
+        Collection<DeviceService> col = findDeviceServices(serviceType, null, this);
+        return col.size() > 0 ? col.toArray(new DeviceService[col.size()]) : null;
+    }
+
 }

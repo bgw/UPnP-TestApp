@@ -40,10 +40,10 @@ public interface NetworkAddressFactory {
 
     public byte[] getHardwareAddress(InetAddress inetAddress);
 
-    public InterfaceAddress getInterfaceAddress(InetAddress inetAddress);
+    public InetAddress getBroadcastAddress(InetAddress inetAddress);
 
-    public InetAddress getLocalInterfaceAddress(NetworkInterface networkInterface,
-                                                boolean isIPv6, 
-                                                InetAddress remoteAddress);
+    public InetAddress getLocalAddress(NetworkInterface networkInterface,
+                                       boolean isIPv6,
+                                       InetAddress remoteAddress);
 
 }

@@ -17,6 +17,8 @@
 
 package org.teleal.cling.binding.xml.parser;
 
+import org.w3c.dom.Node;
+
 /**
  * @author Christian Bauer
  */
@@ -48,5 +50,17 @@ public enum ELEMENT {
     actionList, action, name,
     argumentList, argument, direction, relatedStateVariable, retval,
     serviceStateTable, stateVariable, dataType, defaultValue,
-    allowedValueList, allowedValue, allowedValueRange, minimum, maximum, step
+    allowedValueList, allowedValue, allowedValueRange, minimum, maximum, step;
+
+    public static ELEMENT valueOrNullOf(String s) {
+        try {
+            return valueOf(s);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    public boolean equals(Node node) {
+        return toString().equals(node.getNodeName());
+    }
 }

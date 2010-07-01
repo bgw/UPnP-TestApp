@@ -152,4 +152,16 @@ public class RemoteDevice extends Device<RemoteDeviceIdentity, RemoteDevice, Rem
         Collection<RemoteDevice> col = find(serviceType, this);
         return col.size() > 0 ? col.toArray(new RemoteDevice[col.size()]) : null;
     }
+
+    @Override
+    public DeviceService<RemoteService>[] findDeviceServices() {
+        Collection<DeviceService> col = findDeviceServices(null, null, this);
+        return col.size() > 0 ? col.toArray(new DeviceService[col.size()]) : null;
+    }
+
+    @Override
+    public DeviceService<RemoteService>[] findDeviceServices(ServiceType serviceType) {
+        Collection<DeviceService> col = findDeviceServices(serviceType, null, this);
+        return col.size() > 0 ? col.toArray(new DeviceService[col.size()]) : null;
+    }
 }

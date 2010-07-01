@@ -57,7 +57,7 @@ public class UDN {
         }
     }
 
-    public static UDN fromString(String udnString) {
+    public static UDN valueOf(String udnString) {
         return new UDN(udnString.substring(PREFIX.length()));
     }
 

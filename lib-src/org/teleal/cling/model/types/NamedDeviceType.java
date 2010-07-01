@@ -17,8 +17,6 @@
 
 package org.teleal.cling.model.types;
 
-import org.teleal.cling.model.types.UDN;
-
 
 public class NamedDeviceType {
 
@@ -46,12 +44,12 @@ public class NamedDeviceType {
 
         UDN udn;
         try {
-            udn = UDN.fromString(strings[0]);
+            udn = UDN.valueOf(strings[0]);
         } catch (Exception ex) {
             throw new RuntimeException("Can't parse UDN: " + strings[0]);
         }
 
-        DeviceType deviceType = DeviceType.fromString(strings[1]);
+        DeviceType deviceType = DeviceType.valueOf(strings[1]);
         return new NamedDeviceType(udn, deviceType);
     }
 

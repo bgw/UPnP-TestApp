@@ -17,18 +17,7 @@
 
 package org.teleal.cling.model.message;
 
-import java.util.logging.Logger;
-import java.util.logging.Level;
-
-import org.teleal.cling.model.message.header.UpnpHeader;
-
-import java.util.List;
-import java.util.Map;
-
-
 public abstract class UpnpMessage<O extends UpnpOperation> {
-
-    private static Logger log = Logger.getLogger(UpnpMessage.class.getName());
 
     public static enum BodyType {
         STRING, BYTES
@@ -120,19 +109,6 @@ public abstract class UpnpMessage<O extends UpnpOperation> {
 
     public void setOperation(O operation) {
         this.operation = operation;
-    }
-
-    public void logHeaders() {
-        if (log.isLoggable(Level.FINE)) {
-            log.fine("########################## HEADERS ##########################");
-            for (Map.Entry<UpnpHeader.Type, List<UpnpHeader>> entry : getHeaders().entrySet()) {
-                log.fine("=== TYPE: " + entry.getKey());
-                for (UpnpHeader upnpHeader : entry.getValue()) {
-                    log.fine("HEADER: " + upnpHeader);
-                }
-            }
-            log.fine("#############################################################");
-        }
     }
 
     @Override

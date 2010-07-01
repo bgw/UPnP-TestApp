@@ -15,10 +15,10 @@ import java.util.zip.CRC32;
 )
 public class TestServer {
   
-  @UpnpStateVariable(sendEvents = false)
+  @UpnpStateVariable(name = "RandomData", sendEvents = false)
   private Byte[] data;
   
-  @UpnpStateVariable(sendEvents = false)
+  @UpnpStateVariable(name = "DataChecksum", sendEvents = false)
   private Integer checksum;
   
   public TestServer() {

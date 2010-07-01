@@ -25,6 +25,7 @@ import org.teleal.cling.model.message.UpnpMessage;
 import org.teleal.cling.model.message.UpnpRequest;
 import org.teleal.cling.transport.spi.UpnpStream;
 import org.teleal.cling.protocol.ProtocolFactory;
+import org.teleal.common.http.Headers;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -71,15 +72,11 @@ public class HttpExchangeUpnpStream extends UpnpStream {
             log.fine("Created new request message: " + requestMessage);
 
             // Headers
-            UpnpHeaders headers =
-                    HttpHeaderConverter.convertHeaders(
-                            new HttpHeaders(getHttpExchange().getRequestHeaders())
-                    );
-
-            requestMessage.setHeaders(headers);
+            Headers httpHeaders = new Headers(getHttpExchange().getRequestHeaders());
+            requestMessage.setHeaders(new UpnpHeaders(httpHeaders));
 
             // Body
-            boolean containsTextBody = HttpHeaderConverter.containsTextContentType(requestMessage.getHeaders());
+            boolean containsTextBody = requestMessage.getHeaders().containsTextContentType();
 
             byte[] requestBodyBytes = StreamUtil.readBytes(getHttpExchange().getRequestBody());
 
@@ -107,7 +104,9 @@ public class HttpExchangeUpnpStream extends UpnpStream {
                 log.fine("Preparing HTTP response message: " + responseMessage);
 
                 // Headers
-                applyResponseProperties(responseMessage);
+                getHttpExchange().getResponseHeaders().putAll(
+                        responseMessage.getHeaders().toHttpHeaders()
+                );
 
                 // Body
                 byte[] responseBodyBytes = responseMessage.hasBody() ? responseMessage.getBodyBytes() : null;
@@ -149,14 +148,6 @@ public class HttpExchangeUpnpStream extends UpnpStream {
 
             responseException(t);
         }
-    }
-
-    protected void applyResponseProperties(StreamResponseMessage responseMessage) {
-
-        // Yes, it would be nice if there would be a setResponseHeaders() method on HttpExchange...
-        HttpHeaders responseHeaders = new HttpHeaders();
-        HttpHeaderConverter.writeHeaders(responseMessage.getHeaders(),responseHeaders);
-        getHttpExchange().getResponseHeaders().putAll(responseHeaders);
     }
 
 }

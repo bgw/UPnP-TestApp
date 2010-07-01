@@ -17,8 +17,12 @@
 
 package org.teleal.cling.model.message.header;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public abstract class UpnpHeader<T> {
+
+    final private static Logger log = Logger.getLogger(UpnpHeader.class.getName());
 
     public static enum Type {
 
@@ -110,9 +114,34 @@ public abstract class UpnpHeader<T> {
         return value;
     }
 
-   public abstract void setString(String s) throws InvalidHeaderException;
+    public abstract void setString(String s) throws InvalidHeaderException;
 
     public abstract String getString();
+
+    public static UpnpHeader newInstance(UpnpHeader.Type type, String headerValue) {
+
+        // Try all the UPnP headers and see if one matches our value parsers
+        UpnpHeader upnpHeader = null;
+        for (int i = 0; i < type.getHeaderClasses().length && upnpHeader == null; i++) {
+            Class<? extends UpnpHeader> headerClass = type.getHeaderClasses()[i];
+            try {
+                log.finer("Trying to parse '" + type + "' with class: " + headerClass.getSimpleName());
+                upnpHeader = headerClass.newInstance();
+                if (headerValue != null) {
+                    upnpHeader.setString(headerValue);
+                }
+            } catch (InvalidHeaderException ex) {
+                log.finer("Invalid header value for tested type: " + headerClass.getSimpleName() + " - " + ex.getMessage());
+                upnpHeader = null;
+            } catch (Exception ex) {
+                log.severe("Error instantiating header of type '" + type + "' with value: " + headerValue);
+                log.log(Level.SEVERE, "Cause: " + ex.toString(), ex);
+            }
+
+        }
+        return upnpHeader;
+    }
+
 
     @Override
     public String toString() {

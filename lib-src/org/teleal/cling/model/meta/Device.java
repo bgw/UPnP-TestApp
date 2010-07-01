@@ -192,6 +192,8 @@ public abstract class Device<DI extends DeviceIdentity, D extends Device, S exte
     public abstract D findDevice(UDN udn);
     public abstract D[] findDevices(DeviceType deviceType);
     public abstract D[] findDevices(ServiceType serviceType);
+    public abstract DeviceService<S>[] findDeviceServices();
+    public abstract DeviceService<S>[] findDeviceServices(ServiceType serviceType);
 
     protected D find(UDN udn, D current) {
         if (current.getIdentity().getUdn().equals(udn)) return current;
@@ -232,66 +234,59 @@ public abstract class Device<DI extends DeviceIdentity, D extends Device, S exte
     }
 
     protected Collection<D> find(ServiceType serviceType, D current) {
+        Collection<DeviceService> deviceServices  = findDeviceServices(serviceType, null, current);
         Collection<D> devices = new HashSet();
-        if (current.getFirstDeviceService(serviceType) != null) {
-            devices.add(current);
-        }
-        if (current.hasEmbeddedDevices()) {
-            for (D embeddedDevice : (D[])current.getEmbeddedDevices()) {
-                devices.addAll(find(serviceType, embeddedDevice));
-            }
+        for (DeviceService deviceService : deviceServices) {
+            devices.add((D)deviceService.getDevice());
         }
         return devices;
     }
 
-    public List<DeviceService<S>> getDeviceServices(ServiceType serviceType) {
-        List<DeviceService<S>> matches = new ArrayList();
-        if (hasDeviceServices()) {
-            for (DeviceService ds : getDeviceServices()) {
-                if (ds.getServiceType().equals(serviceType)) {
-                    matches.add(ds);
+    protected Collection<DeviceService> findDeviceServices(ServiceType serviceType, ServiceId serviceId, D current) {
+        Collection<DeviceService> deviceServices  = new HashSet();
+        if (current.hasDeviceServices()) {
+            for (DeviceService deviceService : current.getDeviceServices()) {
+                if (isMatch(deviceService, serviceType, serviceId))
+                    deviceServices.add(deviceService);
+            }
+        }
+        Collection<D> embeddedDevices = findEmbeddedDevices(current);
+        if (embeddedDevices != null) {
+            for (D embeddedDevice : embeddedDevices) {
+                if (embeddedDevice.hasDeviceServices()) {
+                    for (DeviceService deviceService : embeddedDevice.getDeviceServices()) {
+                        if (isMatch(deviceService, serviceType, serviceId))
+                            deviceServices.add(deviceService);
+                    }
                 }
             }
         }
-        return matches;
+        return deviceServices;
     }
 
-    public DeviceService<S> getFirstDeviceService(ServiceType serviceType) {
-        List<DeviceService<S>> services = getDeviceServices(serviceType);
-        if (services != null && services.size() > 0) {
-            return services.get(0);
-        }
-        return null;
+    public DeviceService<S> findDeviceService(ServiceId serviceId) {
+        Collection<DeviceService> deviceServices  = findDeviceServices(null, serviceId, (D)this);
+        return deviceServices.size() == 1 ? deviceServices.iterator().next() : null;
     }
 
-    public DeviceService<S> getDeviceService(ServiceId serviceId) {
-        if (hasDeviceServices()) {
-            for (DeviceService  ds : getDeviceServices()) {
-                if (ds.getServiceId().equals(serviceId))
-                    return ds;
-            }
-        }
-        return null;
+    public DeviceService<S> findFirstDeviceService(ServiceType serviceType) {
+        Collection<DeviceService> deviceServices  = findDeviceServices(serviceType, null, (D)this);
+        return deviceServices.size() > 0 ? deviceServices.iterator().next() : null;
     }
 
     public ServiceType[] findServiceTypes() {
-        Collection<ServiceType> col = findServiceTypes(this);
+        Collection<DeviceService> deviceServices  = findDeviceServices(null, null, (D)this);
+        Collection<ServiceType> col = new HashSet();
+        for (DeviceService deviceService : deviceServices) {
+            col.add(deviceService.getServiceType());
+        }
         return col.toArray(new ServiceType[col.size()]);
     }
 
-    protected Collection<ServiceType> findServiceTypes(Device current) {
-        Collection<ServiceType> serviceTypes = new HashSet();
-        if (current.hasDeviceServices()) {
-            for (DeviceService deviceService : current.getDeviceServices()) {
-                serviceTypes.add(deviceService.getServiceType());
-            }
-        }
-        if (current.hasEmbeddedDevices()) {
-            for (D embeddedDevice : (D[])current.getEmbeddedDevices()) {
-                serviceTypes.addAll(findServiceTypes(embeddedDevice));
-            }
-        }
-        return serviceTypes;
+    private boolean isMatch(DeviceService ds, ServiceType serviceType, ServiceId serviceId) {
+        boolean matchesType = serviceType == null || ds.getServiceType().implementsVersion(serviceType);
+        boolean matchesId = serviceId == null || ds.getServiceId().equals(serviceId);
+        return matchesType && matchesId;
     }
 
     public String getDisplayString() {

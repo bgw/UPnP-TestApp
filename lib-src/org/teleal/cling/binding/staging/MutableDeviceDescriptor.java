@@ -39,8 +39,7 @@ import java.util.List;
 public class MutableDeviceDescriptor {
 
     public UDN udn;
-    public int udaMajorVersion;
-    public int udaMinorVersion;
+    public MutableUDAVersion udaVersion = new MutableUDAVersion();
     public URL baseURL;
     public String deviceType;
     public String friendlyName;
@@ -81,11 +80,11 @@ public class MutableDeviceDescriptor {
     }
 
     public UDAVersion createDeviceVersion() {
-        return new UDAVersion(udaMajorVersion, udaMinorVersion);
+        return new UDAVersion(udaVersion.major, udaVersion.minor);
     }
 
     public DeviceType createDeviceType() {
-        return DeviceType.fromString(deviceType);
+        return DeviceType.valueOf(deviceType);
     }
 
     public DeviceDetails createDeviceDetails(URL baseURL) {

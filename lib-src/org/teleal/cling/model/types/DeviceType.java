@@ -58,7 +58,7 @@ public class DeviceType {
         return version;
     }
 
-    public static DeviceType fromString(String s) throws RuntimeException {
+    public static DeviceType valueOf(String s) throws RuntimeException {
 
         DeviceType deviceType = null;
 

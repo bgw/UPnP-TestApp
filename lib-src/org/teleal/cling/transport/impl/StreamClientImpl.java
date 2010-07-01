@@ -19,12 +19,14 @@ package org.teleal.cling.transport.impl;
 
 import org.teleal.cling.model.message.StreamRequestMessage;
 import org.teleal.cling.model.message.StreamResponseMessage;
+import org.teleal.cling.model.message.UpnpHeaders;
 import org.teleal.cling.model.message.UpnpMessage;
 import org.teleal.cling.model.message.UpnpRequest;
 import org.teleal.cling.model.message.UpnpResponse;
 import org.teleal.cling.transport.Router;
 import org.teleal.cling.transport.spi.InitializationException;
 import org.teleal.cling.transport.spi.StreamClient;
+import org.teleal.common.http.Headers;
 import org.teleal.common.util.URIUtil;
 import sun.net.www.protocol.http.Handler;
 
@@ -166,7 +168,7 @@ public class StreamClientImpl implements StreamClient {
 
         // Other headers
         log.fine("Writing headers on HttpURLConnection: " + requestMessage.getHeaders().size());
-        HttpHeaderConverter.writeHeaders(requestMessage.getHeaders(), urlConnection);
+        requestMessage.getHeaders().applyTo(urlConnection);
     }
 
     protected void applyRequestBody(HttpURLConnection urlConnection, StreamRequestMessage requestMessage) throws IOException {
@@ -202,13 +204,13 @@ public class StreamClientImpl implements StreamClient {
 
         // Headers
         responseMessage.setHeaders(
-                HttpHeaderConverter.convertHeaders(
-                        new HttpHeaders(urlConnection.getHeaderFields())
+                new UpnpHeaders(
+                        new Headers(urlConnection.getHeaderFields())
                 )
-        );
+            );
 
         // Body
-        if (inputStream != null && HttpHeaderConverter.containsTextContentType(responseMessage.getHeaders())) {
+        if (inputStream != null && responseMessage.getHeaders().containsTextContentType()) {
             log.fine("Response contained text content, reading stream...");
             responseMessage.setBody(UpnpMessage.BodyType.STRING, StreamUtil.readBufferedString(inputStream));
         } else if (inputStream != null) {
@@ -232,7 +234,7 @@ public class StreamClientImpl implements StreamClient {
 
         private static final String[] methods = {
                 "GET", "POST", "HEAD", "OPTIONS", "PUT", "DELETE",
-                "SUBSCRIBE", "UNSUBSCRIBE", "NOTIFY"
+                "SUBSCRIBE", "UNSUBSCRIBE", "NOTIFY" // TODO: M-POST and M-SEARCH?
         };
 
         protected UpnpURLConnection(URL u, Handler handler) throws IOException {

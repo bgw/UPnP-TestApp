@@ -59,7 +59,7 @@ public class ServiceType {
         return version;
     }
 
-    public static ServiceType fromString(String s) throws RuntimeException {
+    public static ServiceType valueOf(String s) throws RuntimeException {
 
         ServiceType serviceType = null;
 

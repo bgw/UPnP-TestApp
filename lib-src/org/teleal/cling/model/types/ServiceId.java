@@ -56,7 +56,7 @@ public class ServiceId {
         return id;
     }
 
-    public static ServiceId fromString(String s) throws RuntimeException {
+    public static ServiceId valueOf(String s) throws RuntimeException {
 
         ServiceId serviceId = null;
 
