@@ -1,7 +1,7 @@
 <project name="UPnP-TestApp" default="dist" basedir=".">
   <description>
     A server and client program that will simply test a few UPnP features using
-    Super Bonbon's UPNPLib
+    the Cling UPnP library
   </description>
   
   <!-- set global properties for this build -->
